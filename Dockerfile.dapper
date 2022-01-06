@@ -1,0 +1,38 @@
+FROM golang:1.14.12-buster as build
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        xz-utils \
+        unzip \
+        netcat \
+    && rm -rf /var/lib/apt/lists/*
+
+# -- for make rules
+## install docker client
+RUN apt-get update -qq && apt-get install -y --no-install-recommends \
+        apt-transport-https \
+        ca-certificates \
+        curl \
+        gnupg \
+    && rm -rf /var/lib/apt/lists/*; \
+    \
+    curl -fsSL https://download.docker.com/linux/debian/gpg | apt-key add - >/dev/null; \
+    echo "deb [arch=$(dpkg --print-architecture)] https://download.docker.com/linux/debian buster stable" > /etc/apt/sources.list.d/docker.list; \
+    \
+    apt-get update -qq && apt-get install -y --no-install-recommends \
+        docker-ce-cli=5:19.03.* \
+    && rm -rf /var/lib/apt/lists/*
+## install terraform
+RUN curl -fL "https://releases.hashicorp.com/terraform/0.14.9/terraform_0.14.9_$(go env GOOS)_$(go env GOARCH).zip" -o "/tmp/terraform.zip" \
+    && unzip -o "/tmp/terraform.zip" -d "/tmp" && mv -f "/tmp/terraform" "$(go env GOPATH)/bin/terraform" \
+    && chmod +x "$(go env GOPATH)/bin/terraform"
+# -- for make rules
+
+# -- for dapper
+ENV DAPPER_RUN_ARGS --privileged --network host
+ENV DAPPER_ENV CROSS DOCKER_USERNAME DOCKER_PASSWORD ONLY_MANIFEST IGNORE_MISSING GO111MODULE DRONE_TAG REPO TAG OS ARCH IMAGE_NAME DIRTY_CHECK LOG_LEVEL LOG_COLORFUL TF_LOG REGION HOST_IMAGE_LIST HOST_PASSWORD HOST_TYPE HOST_DISK_CATEGORY ACCESS_KEY SECRET_KEY
+ENV DAPPER_SOURCE /go/src/github.com/thxcode/golang
+ENV DAPPER_OUTPUT ./terraform
+ENV DAPPER_DOCKER_SOCKET true
+# -- for dapper
+
+WORKDIR ${DAPPER_SOURCE}
+ENTRYPOINT ["make", "-se"]
